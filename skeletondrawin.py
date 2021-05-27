@@ -29,7 +29,6 @@ POINT_INFORMATIONS = ['x', 'y', 'z', 'depthX', 'depthY', 'colorX', 'colorY',
                     'orientationZ', 'trackingState']
                     
         
-
 def readSkeleton(fileName):
     with open(fileName, 'r') as file:
         skeletonFileData = dict()
