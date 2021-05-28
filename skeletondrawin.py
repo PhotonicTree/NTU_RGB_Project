@@ -1,3 +1,5 @@
+import numpy as np
+
 # labels of joints:
 # 1.base of spine 2.middle of spine 3.neck 4.head 5.left shoulder 
 # 6.left elbow 7.left wrist 8.left hand 9.right shoulder
@@ -54,6 +56,16 @@ def readSkeleton(fileName):
             skeletonFileData["frameInfo"].append(frameInfo)
     return skeletonFileData
 
+def getXYZ(skletonFileData, maxSkeletons=2, numberOfJoints=25):
+    data = np.zeros((3, skletonFileData["numberOfFrames"], numberOfJoints, maxSkeletons))  # (3,frame_nums,25 2)
+    for n, f in enumerate(skletonFileData["frameInfo"]):
+        for m, b in enumerate(f["skeletonInfo"]):
+            for j, v in enumerate(b["jointInfo"]):
+                if m < maxSkeletons and j < numberOfJoints:
+                    data[:, n, j, m] = [v['x'], v['y'], v['z']]
+                else:
+                    pass
+    return data
 
 if __name__ == '__main__':
 
