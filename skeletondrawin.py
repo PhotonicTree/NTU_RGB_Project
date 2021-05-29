@@ -57,17 +57,17 @@ def readSkeleton(fileName):
     return skeletonFileData
 
 def getXYZ(skletonFileData, maxSkeletons=2, numberOfJoints=25):
-    data = np.zeros((3, skletonFileData["numberOfFrames"], numberOfJoints, maxSkeletons))  # (3,frame_nums,25 2)
-    for n, f in enumerate(skletonFileData["frameInfo"]):
-        for m, b in enumerate(f["skeletonInfo"]):
-            for j, v in enumerate(b["jointInfo"]):
-                if m < maxSkeletons and j < numberOfJoints:
-                    data[:, n, j, m] = [v['x'], v['y'], v['z']]
+    data = np.zeros((3, skletonFileData["numberOfFrames"], numberOfJoints, maxSkeletons))
+    for countFrame, frameInfo in enumerate(skletonFileData["frameInfo"]):
+        for countSkeletons, b in enumerate(frameInfo["skeletonInfo"]):
+            for countJoint, joint in enumerate(b["jointInfo"]):
+                if (countSkeletons < maxSkeletons and countJoint < numberOfJoints):
+                    data[:, countFrame, countJoint, countSkeletons] = [joint['x'], joint['y'], joint['z']]
                 else:
                     pass
     return data
 
 if __name__ == '__main__':
-
-    print(readSkeleton("C:\\Users\\Konrad\\Documents\\Python\\Task\\S001C001P001R001A001.skeleton"))
+    print(np.zeros((3,70,25,2)))
+    #print(readSkeleton("C:\\Users\\Konrad\\Documents\\Python\\Task\\S001C001P001R001A001.skeleton"))
     
