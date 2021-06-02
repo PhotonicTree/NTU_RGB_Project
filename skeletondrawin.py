@@ -1,6 +1,8 @@
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+import cv2
+import glob
 
 # labels of joints:
 # 1.base of spine 2.middle of spine 3.neck 4.head 5.left shoulder 
@@ -58,20 +60,41 @@ def readSkeleton(fileName):
             skeletonFileData["frameInfo"].append(frameInfo)
     return skeletonFileData
 
-# getXYZ Function get as input parameter '.skeleton' file data and return XYZ Coordinates
- 
-def getXYZ(skletonFileData, maxSkeletons=2, numberOfJoints=25):
-    xyzCoordinates = np.zeros((3, skletonFileData["numberOfFrames"], numberOfJoints, maxSkeletons))
-    for countFrame, frameInfo in enumerate(skletonFileData["frameInfo"]):
-        for countSkeletons, b in enumerate(frameInfo["skeletonInfo"]):
-            for countJoint, joint in enumerate(b["jointInfo"]):
-                if (countSkeletons < maxSkeletons and countJoint < numberOfJoints):
-                    xyzCoordinates[:, countFrame, countJoint, countSkeletons] = [joint['x'], joint['y'], joint['z']]
-                else:
-                    pass
-    return xyzCoordinates
+# getPoints Function get as input parameter '.skeleton' file data and return XYZ Coordinates or XYRGB or XYDepth depending on the mode
+def getPoints(skletonFileData, mode, maxSkeletons=2, numberOfJoints=25):
+    joint = dict()
+    if mode == 'depth':
+        returnPoints = np.zeros((2, skletonFileData["numberOfFrames"], numberOfJoints, maxSkeletons))
+        for countFrame, frameInfo in enumerate(skletonFileData["frameInfo"]):
+            for countSkeletons, skeletonInfo in enumerate(frameInfo["skeletonInfo"]):
+                for countJoint, joint in enumerate(skeletonInfo["jointInfo"]):
+                    if (countSkeletons < maxSkeletons and countJoint < numberOfJoints):
+                        returnPoints[:, countFrame, countJoint, countSkeletons] = [joint['depthX'], joint['depthY']]
+                    else:
+                        pass
+        return returnPoints
+    elif mode == 'rgb':
+        returnPoints = np.zeros((2, skletonFileData["numberOfFrames"], numberOfJoints, maxSkeletons))
+        for countFrame, frameInfo in enumerate(skletonFileData["frameInfo"]):
+            for countSkeletons, skeletonInfo in enumerate(frameInfo["skeletonInfo"]):
+                for countJoint, joint in enumerate(skeletonInfo["jointInfo"]):
+                    if (countSkeletons < maxSkeletons and countJoint < numberOfJoints):
+                        returnPoints[:, countFrame, countJoint, countSkeletons] =  [joint['colorX'], joint['colorY']]
+                    else:
+                        pass
+        return returnPoints
+    elif mode == "xyz":
+        returnPoints = np.zeros((3, skletonFileData["numberOfFrames"], numberOfJoints, maxSkeletons))
+        for countFrame, frameInfo in enumerate(skletonFileData["frameInfo"]):
+            for countSkeletons, skeletonInfo in enumerate(frameInfo["skeletonInfo"]):
+                for countJoint, joint in enumerate(skeletonInfo["jointInfo"]):
+                    if (countSkeletons < maxSkeletons and countJoint < numberOfJoints):
+                        returnPoints[:, countFrame, countJoint, countSkeletons] = [joint['x'], joint['y'], joint['z']]
+                    else:
+                        pass
+        return returnPoints
 
-# setCenterPoint normalization function
+# setCenterPoint 3DPlot normalization function
 def setCenterPoint(skletonFileData):
     firstPoint = skletonFileData[0, :, 0, :]
     firstPointx = np.mean(firstPoint[:, 0])
@@ -79,13 +102,12 @@ def setCenterPoint(skletonFileData):
     firstPointz = np.mean(firstPoint[:, 2])
 
     averageCenter = np.array([firstPointx, firstPointy, firstPointz])
-    # reset data to have overlapping points
+    # reset data to have overlapping points in plot
     skletonFileData = skletonFileData - averageCenter
 
     return skletonFileData
 
-
-def showSkeleton(xyzCoordinates):
+def show3DPlot(pointsData):
     pltFigure = plt.figure()
     axes = Axes3D(pltFigure)
     elevationAngle = 20
@@ -93,15 +115,12 @@ def showSkeleton(xyzCoordinates):
     axes.view_init(elevationAngle, azimuthAngle)
     plt.ion()
 
-    skeletonData = np.transpose(xyzCoordinates, (3, 1, 2, 0))   # Change the index value, change the index value of the x subscript to the end, and change the max_body index value to the front
-
+    skeletonData = np.transpose(pointsData, (3, 1, 2, 0)) 
     skeletonData = setCenterPoint(skeletonData)
 
-    # show every frame 3d skeleton
+    # show frame by frame 3d skeleton
     for frame in range(skeletonData.shape[1]):
         plt.cla()
-        plt.title("eluwinka")
-
         axes.set_xlim3d([-1, 1])
         axes.set_ylim3d([-1, 1])
         axes.set_zlim3d([-0.8, 0.8])
@@ -127,8 +146,73 @@ def showSkeleton(xyzCoordinates):
     axes.axis('off')
     plt.show()
 
+# NTU RGB dataset contains folders of depth images, video can be made from them by this function
+def prepareDepthVideo(folderName):
+    imgList = glob.glob(folderName + '/*.*')
+    firstImg = cv2.imread(imgList[0])
+    depthVideo = cv2.VideoWriter(folderName + '_depth.avi', cv2.VideoWriter_fourcc(*'XVID'), 
+                                        20.0, (int(firstImg.shape[1]),int(firstImg.shape[0])))
+    for imgName in imgList:
+        img = cv2.imread(imgName)
+        depthVideo.write(img)
+    return (folderName + '_depth.avi')
+
+# show video with drawn skeleton
+def showVideo(videoFileName, skeletonXY, mode):
+    video = cv2.VideoCapture(videoFileName)
+    saveVideo = cv2.VideoWriter(videoFileName.rsplit(".", 1)[0]  + '_save.avi', cv2.VideoWriter_fourcc(*'XVID'), 
+                                        20.0, (int(video.get(3)),int(video.get(4))))
+    skeletonXY = np.transpose(skeletonXY, (3, 1, 2, 0))
+    for row in skeletonXY:
+        for points in row:
+            success, frame = video.read()
+            if(success == True):
+                # draw all points in each frame
+                for point in points:
+                    cv2.circle(frame, (int(point[0]), int(point[1])), 2, (0, 0, 255), 6)
+                legPoints = []
+                spinePoints = []
+                armPoints = []
+                for legPoint in LEG_POINTS:
+                    legPoints.append([int(points[legPoint][0]), int(points[legPoint][1])])   
+                for armPoint in ARM_POINTS:
+                    armPoints.append([int(points[armPoint][0]), int(points[armPoint][1])])
+                for spinePoint in SPINE_POINTS:
+                    spinePoints.append([int(points[spinePoint][0]), int(points[spinePoint][1])])
+
+                legPoints = np.array(legPoints, np.int32)
+                armPoints = np.array(armPoints, np.int32)
+                spinePoints = np.array(spinePoints, np.int32)
+                # draw joint connections for each group
+                cv2.polylines(frame, [legPoints], False, (255,0,0), 3)
+                cv2.polylines(frame, [spinePoints], False, (255,0,0), 3)
+                cv2.polylines(frame, [armPoints], False, (255,0,0), 3)
+                saveVideo.write(frame)
+                cv2.imshow(mode, frame)
+                kk = cv2.waitKey(1) & 0xFF
+                # press 'e' to exit the video
+                if kk == ord('e'):
+                    break
+
+
+# showing the skeleton in 3D, RGB or depth
+def showSkeleton(pointsData, mode, fileName = ""):
+    if mode == 'xyz':
+        show3DPlot(pointsData)
+    elif mode == 'rgb':
+        showVideo(fileName, pointsData, mode)
+    elif mode == 'depth':
+        showVideo(fileName, pointsData, mode)
+
+
 if __name__ == '__main__':
     
-    skeleton = getXYZ(readSkeleton("C:\\Users\\Konrad\\Documents\\Python\\Task\\S001C001P001R001A001.skeleton"))
-    showSkeleton(skeleton)
-    
+    #test files names: skeleton - "S001C001P001R001A001.skeleton", rgb - "S001C001P001R001A001_rgb.avi", depthFolder = "S001C001P001R001A001/"
+    #prepareDepthVideo('S001C001P001R001A001')
+
+    pointsDepth = getPoints(readSkeleton("S001C001P001R001A001.skeleton"), 'depth')
+    showSkeleton(pointsDepth, 'depth', "S001C001P001R001A001_depth.avi")
+    points3D = getPoints(readSkeleton("S001C001P001R001A001.skeleton"), 'xyz')
+    showSkeleton(points3D, 'xyz')
+    pointsRGB = getPoints(readSkeleton("S001C001P001R001A001.skeleton"), 'rgb')
+    showSkeleton(pointsRGB, 'rgb', "S001C001P001R001A001_rgb.avi")
